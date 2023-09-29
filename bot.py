@@ -6,9 +6,12 @@ import schedule
 import telebot
 import concurrent.futures  # Import the concurrent.futures module
 from main import scrape_data
+import queue  # Add this import for the queue
 
 # Replace 'YOUR_BOT_TOKEN' with your actual API token
-bot = telebot.TeleBot("6687023134:AAGCTy2mi9LW7D1B9s3jIVZrTY5FoKgEyeg")
+bot = telebot.TeleBot("6557357802:AAGm5l1y7fMlOXhhPzyizZZS1qUUXs2uGtU")
+user_queue = queue.Queue()
+
 
 
 class UlifeBot:
@@ -29,7 +32,8 @@ class UlifeBot:
         # Schedule the task to run at 7 AM
         schedule.every().day.at("07:00").do(self.check_new_things_everyday)
 
-    def send_message_to_telegram(self, chat_id, message):
+    @staticmethod
+    def send_message_to_telegram(chat_id, message):
         bot.send_message(chat_id, message, parse_mode="HTML")
 
     # Load user preferences from the database
@@ -54,7 +58,8 @@ class UlifeBot:
 
         bot.send_message(chat_id, "Por favor, saiba que as informações que vou pedir são sensíveis.\n"
                                   "Você tem a liberdade de não continuar se não se sentir seguro(a).\n"
-                                  "Preciso do seu nome de usuário e senha do Ulife para fazer login na sua conta e recuperar as informações.\n"
+                                  "Preciso do seu nome de usuário e "
+                                  "senha do Ulife para fazer login na sua conta e recuperar as informações.\n"
                                   "Se você não deseja continuar, basta parar aqui. Obrigado.")
 
         # Solicitar o nome de usuário e senha
@@ -85,7 +90,7 @@ class UlifeBot:
                                   "Você agora pode usa o menu Aviso para definir suas preferencias de notificações.")
 
         # Save user preferences to the database
-        self.save_user_preferences(self.user_config)
+        self.save_user_preferences(self.user_config, chat_id)
 
     def handle_aviso(self, message):
         chat_id = message.chat.id
@@ -109,12 +114,14 @@ class UlifeBot:
         bot.send_message(chat_id, f"Preferências de notificações alteradas para: {preference}")
 
         # Save user preferences to the database
-        self.save_user_preferences(self.user_config)
+        self.save_user_preferences(self.user_config, chat_id)
 
     # Save user preferences to the database
-    def save_user_preferences(self, user_config):
+    def save_user_preferences(self, user_config, chat_id):
         with open(self.user_preferences_db, "wb") as file:
             pickle.dump(user_config, file)
+
+        bot.send_message(chat_id, ulife_bot.opcao_string, reply_markup=ulife_bot.create_keyboard_markup())
 
     def handle_future_data(self, chat_id):
         # Handle "Me dê todas as aulas futuras" option
@@ -124,9 +131,11 @@ class UlifeBot:
         if username and password:
             bot.send_message(chat_id, "Carregando todas os compromissos futuros (incluindo hoje, se houver)...")
             # You can implement the logic to fetch and send all future data here using 'scrape_data' function.
-            self.fetch_data(chat_id, False, True, [False, False], bot)
+            self.fetch_data(chat_id, False, True, [False, False])
         else:
             bot.send_message(chat_id, self.erro_autenticacao_string)
+
+        bot.send_message(chat_id, self.opcao_string, reply_markup=self.create_keyboard_markup())
 
     def handle_all_data(self, chat_id):
         # Handle "Me dê todas as aulas" option
@@ -135,9 +144,11 @@ class UlifeBot:
 
         if username and password:
             bot.send_message(chat_id, "Buscando todos os seus compromissos, futuros e passados...")
-            self.fetch_data(chat_id, False, False, [False, False], bot)
+            self.fetch_data(chat_id, False, False, [False, False])
         else:
             bot.send_message(chat_id, self.erro_autenticacao_string)
+
+        bot.send_message(chat_id, self.opcao_string, reply_markup=self.create_keyboard_markup())
 
     def handle_today_data(self, chat_id):
         # Handle "O que há hoje?" option
@@ -145,9 +156,12 @@ class UlifeBot:
         password = self.user_config.get(chat_id, {}).get("password")
 
         if username and password:
-            self.fetch_data(chat_id, True, False, [False, False], bot)
+            bot.send_message(chat_id, "Verificando seus compromissos de hoje...")
+            self.fetch_data(chat_id, True, False, [False, False])
         else:
             bot.send_message(chat_id, self.erro_autenticacao_string)
+
+        bot.send_message(chat_id, self.opcao_string, reply_markup=self.create_keyboard_markup())
 
     def handle_notifications(self, chat_id):
         # Handle "O que há hoje?" option
@@ -156,11 +170,14 @@ class UlifeBot:
 
         if username and password:
             bot.send_message(chat_id, "Procurando por notificações não lidas...")
-            self.fetch_data(chat_id, False, False, [True, False], bot)
+            self.fetch_data(chat_id, False, False, [True, False])
         else:
             bot.send_message(chat_id, self.erro_autenticacao_string)
 
-    def menu_duvida(self, chat_id):
+        bot.send_message(chat_id, self.opcao_string, reply_markup=self.create_keyboard_markup())
+
+    @staticmethod
+    def menu_duvida(chat_id):
         markup = telebot.types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
         markup.add("Por que precisa das minhas credenciais?", "O que você pode fazer?", "Como funciona?",
                    "O que fica salvo dos meus dados?", "Voltar ao menu principal")
@@ -204,21 +221,27 @@ class UlifeBot:
         elif duvida == "O que fica salvo dos meus dados?":
             bot.send_message(chat_id, "Salvo apenas as informações necessárias para fornecer o serviço, "
                                       "como seu nome de usuário, senha e preferências de notificação. "
-                                      "Suas informações de login são protegidas e não são compartilhadas com terceiros.")
+                                      "Suas informações de login são protegidas e não são compartilhadas com terceiros."
+                             )
             self.handle_duvidas(message)
 
         elif duvida == "Voltar ao menu principal":
             bot.send_message(chat_id, self.opcao_string, reply_markup=self.create_keyboard_markup())
         else:
-            bot.send_message(chat_id, "Desculpe, não entendi a pergunta. Por favor, escolha uma das opções fornecidas.")
+            bot.send_message(chat_id, "Desculpe, não entendi a pergunta. "
+                                      "Por favor, escolha uma das opções fornecidas.")
             # Define keyboard with options
             self.handle_duvidas(message)
 
-    def fetch_data(self, chat_id, only_today, only_future, only_notifications, bot):
+    def fetch_data(self, chat_id, only_today, only_future, only_notifications):
         # Extract user credentials and preferences from the user_config dictionary
         if chat_id in self.user_config:
             username = self.user_config[chat_id]["username"]
             password = self.user_config[chat_id]["password"]
+
+            scrape_data(username, password, chat_id, bot, only_today = only_today,
+            only_future = only_future, only_notifications = only_notifications)
+            return
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                 # Submit scraping tasks with user's credentials and preferences
@@ -245,8 +268,10 @@ class UlifeBot:
 
             # Check if the user's preference matches "Notificações e o que há hoje" or "Apenas notificações"
             if notification_preference in ["Notificações e o que há hoje", "Apenas notificações"]:
-                # Implement logic to check for new notifications for this user
-                self.fetch_data(chat_id, False, False, [True, True], bot)
+                user_queue.put((chat_id, "check_notifications"))
+
+    def verificar_notificacoes_silenciosamente(self, chat_id):
+        self.fetch_data(chat_id, False, False, [True, True])
 
     def check_new_things_everyday(self):
         # Iterate through user preferences to find users with specific preferences
@@ -255,11 +280,16 @@ class UlifeBot:
 
             # Check if the user's preference matches "Notificações e o que há hoje" or "Apenas notificações"
             if notification_preference in ["Notificações e o que há hoje", "Apenas o que há hoje"]:
-                bot.send_message(chat_id, "Bom dia! Veremos se hoje teremos algo para fazer...")
-                self.handle_today_data(chat_id)
+                user_queue.put((chat_id, "check_things_everyday"))
+
+    def verificar_novos_compromissos(self, chat_id):
+        bot.send_message(chat_id, "Bom dia! Veremos se hoje teremos algo para fazer...")
+
+        self.handle_today_data(chat_id)
 
     # Function to run the scheduled jobs
-    def run_scheduled_jobs(self):
+    @staticmethod
+    def run_scheduled_jobs():
         while True:
             schedule.run_pending()
             time.sleep(1)  # Sleep for a second to avoid high CPU usage
@@ -271,6 +301,33 @@ class UlifeBot:
         scheduler_thread.start()
         bot.polling()
 
+    def process_queue(self):
+        # Create a ThreadPoolExecutor to process tasks concurrently
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            while True:
+                try:
+                    chat_id, request_type = user_queue.get()
+                    if request_type == "today":
+                        executor.submit(self.handle_today_data, chat_id)
+                    elif request_type == "all":
+                        executor.submit(self.handle_all_data, chat_id)
+                    elif request_type == "future":
+                        executor.submit(self.handle_future_data, chat_id)
+                    elif request_type == "notifications":
+                        executor.submit(self.handle_notifications, chat_id)
+
+                    elif request_type == "check_notifications":
+
+                        executor.submit(self.verificar_notificacoes_silenciosamente, chat_id)
+
+                    elif request_type == "check_things_everyday":
+
+                        executor.submit(self.verificar_novos_compromissos, chat_id)
+
+                    user_queue.task_done()
+                except Exception as e:
+                    print(e)
+
 
 ulife_bot = UlifeBot()
 
@@ -280,52 +337,52 @@ def handle_message(message):
     chat_id = message.chat.id
 
     if message.text == "O que há hoje?":
-        bot.send_message(chat_id, "Carregando dados de hoje, se houver algum...")
-        ulife_bot.handle_today_data(chat_id)
-        bot.send_message(chat_id, ulife_bot.opcao_string, reply_markup=ulife_bot.create_keyboard_markup())
+        user_queue.put((chat_id, "today"))
 
     elif message.text == "Me dê todas as aulas":
-        ulife_bot.handle_all_data(chat_id)
-        bot.send_message(chat_id, ulife_bot.opcao_string, reply_markup=ulife_bot.create_keyboard_markup())
+        user_queue.put((chat_id, "all"))
 
     elif message.text == "Me dê todas as aulas futuras":
-        ulife_bot.handle_future_data(chat_id)
-        bot.send_message(chat_id, ulife_bot.opcao_string, reply_markup=ulife_bot.create_keyboard_markup())
+        user_queue.put((chat_id, "future"))
 
     elif message.text == "Configurar":
         # Handle "Configurar" option
         ulife_bot.handle_configurar(message)
-        bot.send_message(chat_id, ulife_bot.opcao_string, reply_markup=ulife_bot.create_keyboard_markup())
 
     elif message.text == "Aviso":
         # Handle "Aviso" option
         ulife_bot.handle_aviso(message)
-        bot.send_message(chat_id, ulife_bot.opcao_string, reply_markup=ulife_bot.create_keyboard_markup())
 
     elif message.text == "Minhas Notificações":
-        # Handle "Minhas Notificações" option
-        ulife_bot.handle_notifications(chat_id)
-        bot.send_message(chat_id, ulife_bot.opcao_string, reply_markup=ulife_bot.create_keyboard_markup())
+        user_queue.put((chat_id, "notifications"))
 
     elif message.text == "Dúvidas":
         ulife_bot.handle_duvidas(message)
 
     else:
         bot.send_message(chat_id, "Oi! Estou feliz que esteja aqui para testar meus serviços. \n"
-                                  "Sou um bot feito para ajudar alunos como você do ecossistema Ânima ao usar o Ulife. \n"
+                                  "Sou um bot feito para ajudar alunos do ecossistema Ânima ao usar o Ulife. \n"
                                   "Eu automatizo simples funções como: \n"
                                   "1 - Avisar por compromissos, todos os dias, por volta das 7am.\n"
                                   "2 - Mostrar compromissos de hoje, passados, ou futuros.\n"
-                                  "3 - Avisar sobre notificações não lidas.\n"
-                                  "Mas para isso eu preciso de seu login e senha do Ulife, o que são sensíveis.\n"
-                                  "Por favor, caso não queira compartilhar comigo, não há problema. Apenas paramos por aqui então. \n"
-                                  "Estarei aqui caso precise de mim novamente!")
+                                  "3 - Avisar sobre notificações não lidas.\n")
+        usuario = ulife_bot.user_config.get(chat_id, {})
+        if usuario == {}:
+            bot.send_message(chat_id, "Parece que é a sua primeira vez aqui! "
+                                      "Gostaria de continuar ? Para continuar, selecione Configurar no menu.")
 
         bot.send_message(chat_id, ulife_bot.opcao_string, reply_markup=ulife_bot.create_keyboard_markup())
 
 
-while True:
-    try:
-        ulife_bot.start()
-    except Exception as e:
-        print(e)
+
+if __name__ == "__main__":
+    ulife_bot = UlifeBot()
+    # Start the queue processing in a separate thread
+    queue_thread = threading.Thread(target=ulife_bot.process_queue)
+    queue_thread.start()
+
+    while True:
+        try:
+            ulife_bot.start()
+        except Exception as e:
+            print(e)

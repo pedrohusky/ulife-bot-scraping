@@ -3,7 +3,6 @@ import os
 import pickle
 import re
 import time
-from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -38,11 +37,9 @@ cookies_str = ''
 
 cookies = {}
 
-
-
 # Initialize Chrome options in headless mode
 chrome_options = Options()
-chrome_options.add_argument('--headless')
+#chrome_options.add_argument('--headless')
 chrome_options.add_argument('--disable-gpu')  # Necessary for headless on Windows
 chrome_options.add_argument('--no-sandbox')  # Necessary to avoid certain errors
 chrome_options.add_argument('--disable-dev-shm-usage')  # Necessary for headless on Linux
@@ -138,7 +135,8 @@ def select_first_non_special_campus(driver):
     try:
 
         # Encontre o side-menu e clique nele para abrir o campus_chooser
-        side_menu = WebDriverWait(driver, 1).until(EC.element_to_be_clickable((By.CLASS_NAME, "sideMenuCheckbox.sideMenu")))
+        side_menu = WebDriverWait(driver, 1).until(
+            EC.element_to_be_clickable((By.CLASS_NAME, "sideMenuCheckbox.sideMenu")))
         side_menu.click()
         time.sleep(0.25)
 
@@ -170,6 +168,7 @@ def select_first_non_special_campus(driver):
         # Adicione aqui o tratamento adequado para outras exceções
 
     return None  # Retorna None se houver falha na seleção
+
 
 def get_notifications(driver):
     # Encontre o side-menu e clique nele para abrir o campus_chooser
@@ -224,7 +223,6 @@ def process_month(month):
 
 
 def process_day(day, month_details, month_name, driver, only_future):
-
     simple_card = False
 
     # Highlight the current item
@@ -413,7 +411,7 @@ def extract_calendar_info(driver, only_today=False, only_future=False):
 def go_to_page(driver, page):
     print(f'Going to: {main_url}')
     driver.get(page)
-    #driver.implicitly_wait(6)
+    # driver.implicitly_wait(6)
 
 
 def login(username, password, driver, only_today, only_future, only_notifications):
@@ -484,7 +482,7 @@ def send_calendar_details_to_telegram(chat_id, calendar_details, bot):
 
                 message += f"O que há hoje: {day_segments['Activ List Text']}\n\n"
 
-                message += f"Horário: {'até as' if day_segments['Simple'] else 'começa'} às {day_segments['Hour'][0] if len(day_segments['Hour']) > 0 else day_segments['Hour']}{' termina às ' + day_segments['Hour'][1] if len(day_segments['Hour']) > 1 else ''}\n\n"
+                message += f"Horário: {'até' if day_segments['Simple'] else 'começa'} às {day_segments['Hour'][0] if len(day_segments['Hour']) > 0 else day_segments['Hour']}{' termina às ' + day_segments['Hour'][1] if len(day_segments['Hour']) > 1 else ''}\n\n"
 
                 i = 0
                 for link_text in link_hrefs:
@@ -550,6 +548,7 @@ def send_recent_notifications(chat_id, calendar_details, silent, bot):
     if zero_notifications and not silent:
         bot.send_message(chat_id, "Nenhuma notificação recente encontrada.")
 
+
 # Define a function to encapsulate the scraping logic
 def scrape_data(username, password, chat_id, bot, only_today=False, only_future=False, only_notifications=None):
     if only_notifications is None:
@@ -590,7 +589,6 @@ def scrape_data(username, password, chat_id, bot, only_today=False, only_future=
 
 
 def save_user_data(chat_id, field, calendar_details):
-
     user_data = load_user_data(chat_id)
     if user_data is not None:
         user_data[field] = calendar_details
