@@ -9,7 +9,7 @@ from main import scrape_data
 import queue  # Add this import for the queue
 
 # Replace 'YOUR_BOT_TOKEN' with your actual API token
-bot = telebot.TeleBot("6557357802:AAGm5l1y7fMlOXhhPzyizZZS1qUUXs2uGtU")
+bot = telebot.TeleBot("XXXXXXXXXXXXXXXXXXXXXX")
 user_queue = queue.Queue()
 
 
